@@ -295,4 +295,12 @@ The project demonstrates implemented IAM controls, controlled laboratory testing
 
 ---
 
+## Identity Architecture
+
+![Cedarbridge Health System IAM Architecture](Architecture/CHS-Identity-Architecture-Overview.png)
+
+[View the editable technical architecture](Architecture/CHS-Identity-Architecture.mmd)
+
+---
+
 *Project developed as an independent identity security and governance laboratory using fictional Cedarbridge Health System scenarios.*
