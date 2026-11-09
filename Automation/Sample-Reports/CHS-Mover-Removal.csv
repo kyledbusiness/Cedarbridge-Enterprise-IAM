@@ -1,0 +1,2 @@
+RequestId,User,Action,ApprovalSource,Status,Verified,Timestamp
+CHS-MOV-001,jordan.lee@chs.example,REMOVE_DEVELOPER_ACCESS,SIMULATED_CSV,REMOVED,True,2026-11-06T20:17:11.4902140-05:00
