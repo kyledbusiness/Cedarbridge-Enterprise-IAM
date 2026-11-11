@@ -1,66 +1,61 @@
-flowchart LR
-    %% Cedarbridge Health System — implemented IAM architecture
-    %% Solid arrows = implemented/tested flows unless specifically marked as configuration-only.
-    %% Dashed arrows = supporting governance, review, or proposed components.
+flowchart TB
+  %% Cedarbridge Health System fictional IAM lab
+  %% Solid connectors are tested/configured integrations, dashed are supporting workflow/evidence.
+  subgraph People["PERSONAS & BUSINESS INPUTS"]
+    Staff["Jordan / Taylor / Marcus<br/>CHS workforce identities"]
+    Admin["Sophia<br/>Privileged administrator"]
+    Approval["Daniel / Marcus<br/>Manager approvals and access review"]
+    HR["Simulated HR transfer + approval CSVs"]
+  end
 
-    subgraph Actors["WORKFORCE & BUSINESS INPUTS"]
-        Staff["Employees / contractors<br/>Jordan, Taylor and other lab users"]
-        Priv["Sophia — privileged admin<br/>PIM-eligible Cloud App Admin"]
-        Emerg["2 emergency accounts<br/>Permanent Global Admin + FIDO2"]
-        Decision["Manager approval / access review<br/>Daniel / Marcus"]
-        HR["Simulated HR transfer +<br/>approval CSV records"]
-    end
+  subgraph Entra["MICROSOFT ENTRA ID — WORKFORCE TENANT"]
+    SSO["Identity provider<br/>Workforce authentication"]
+    CA["Conditional Access<br/>Enabled and Report-only policies"]
+    PIM["Privileged Identity Management<br/>Eligible role / JIT activation"]
+    GOV["Entitlement Management<br/>Access packages + access reviews"]
+    Groups["Security groups / assignments<br/>Developers, Project Leads, App Users"]
+    Logs["Sign-in, audit, provisioning<br/>and PIM logs"]
+  end
 
-    subgraph Entra["MICROSOFT ENTRA ID — WORKFORCE TENANT"]
-        Auth["Central workforce authentication<br/>Conditional Access: CA-001–003 On<br/>CA-004–006 Report-only"]
-        PIM["Privileged Identity Management<br/>Eligible role + JIT activation"]
-        Gov["Entitlement Management<br/>Access packages + manager approval<br/>Access Reviews"]
-        Groups["Security groups / RBAC<br/>Developers · Project Leads<br/>CA pilot · SAML portal users"]
-        Audit["Entra audit logs<br/>Provisioning logs / PIM events"]
-    end
+  subgraph GitHub["GITHUB ENTERPRISE MANAGED USERS"]
+    GHSSO["OIDC enterprise SSO"]
+    SCIM["SCIM users / group sync"]
+    Teams["Organization teams + RBAC<br/>Developer Write / Lead Maintain"]
+    GHAudit["GitHub team and audit evidence"]
+  end
 
-    subgraph Automation["IDENTITY LIFECYCLE AUTOMATION"]
-        PS["Microsoft Graph PowerShell<br/>Validate → Dry run → Add role<br/>Verify target → Remove old role"]
-        Reports["Execution + exception CSVs<br/>Final-state Entra checks"]
-    end
+  subgraph Zammad["CHS CLINIC INTEGRATION SUPPORT DESK — ZAMMAD"]
+    Saml["SAML 2.0 SSO<br/>Entra signing certificate verified"]
+    Roles["Local app roles<br/>Customer / Agent / Admin"]
+    Ticket["Jordan creates ticket<br/>Marcus owns / responds"]
+  end
 
-    subgraph Apps["DOWNSTREAM APPLICATIONS"]
-        GHSSO["GitHub Enterprise Cloud (EMU)<br/>OIDC workforce SSO"]
-        SCIM["Microsoft Entra → GitHub<br/>SCIM user/group provisioning"]
-        GHTeams["GitHub teams / repository RBAC<br/>Developer: Write<br/>Project Lead: Maintain"]
-        SAML["Employee Operations Portal<br/>SAML 2.0 (Entra SAML Toolkit)<br/>Assignment required"]
-        GHLogs["GitHub audit events<br/>External group + team membership"]
-    end
+  subgraph Lifecycle["JML & EVIDENCE"]
+    PowerShell["Microsoft Graph PowerShell<br/>Validate → Dry-run → remove old membership"]
+    Results["CSV decisions / logs / screenshots<br/>Manual state reconciliation"]
+  end
 
-    Staff -->|Sign in| Auth
-    Priv -->|Activate eligible role| PIM
-    PIM -->|Time-limited role| Auth
-    Emerg -->|Independent emergency access| Auth
-    Decision -->|Requests and recertification| Gov
-    Gov -->|Approved grants / revoked assignments| Groups
-    HR -->|Input only — not authoritative HRIS| PS
-    PS <-->|Microsoft Graph group changes| Groups
-    PS --> Reports
-    Auth -->|OIDC sign-in| GHSSO
-    Auth -->|SAML sign-in| SAML
-    Groups -->|Assigned users and groups| SCIM
-    SCIM -->|Asynchronous synchronization| GHTeams
-    GHSSO --> GHTeams
-    Groups -.-> Audit
-    Gov -.-> Audit
-    GHTeams -.-> GHLogs
-    Audit -.->|Investigate| Reports
-    GHLogs -.->|Verify downstream removal| Reports
+  Staff --> SSO
+  Admin --> PIM
+  PIM --> SSO
+  CA -.-> SSO
+  Approval --> GOV
+  GOV --> Groups
+  HR --> PowerShell
+  PowerShell --> Groups
+  Groups -->|Assigned users + groups| SCIM
+  SSO -->|OIDC| GHSSO
+  GHSSO --> Teams
+  SCIM --> Teams
+  Teams -.-> GHAudit
+  SSO -->|SAML 2.0| Saml
+  Saml --> Roles
+  Roles --> Ticket
+  SSO -.-> Logs
+  GOV -.-> Logs
+  Groups -.-> Logs
+  Logs -.-> Results
+  GHAudit -.-> Results
+  Ticket -.-> Results
 
-    classDef person fill:#eef5ff,stroke:#3573bf,color:#0b2a4c,stroke-width:1.5px;
-    classDef idp fill:#e5f2ff,stroke:#1769aa,color:#0b2a4c,stroke-width:2px;
-    classDef govern fill:#f2eaff,stroke:#7751b7,color:#302052,stroke-width:1.5px;
-    classDef automation fill:#ebfbf4,stroke:#1b876b,color:#103f33,stroke-width:1.5px;
-    classDef external fill:#fef6e7,stroke:#b98024,color:#48370c,stroke-width:1.5px;
-    classDef evidence fill:#f1f4f7,stroke:#617184,color:#263442,stroke-width:1.5px;
-    class Staff,Priv,Emerg,Decision,HR person;
-    class Auth,Groups,PIM idp;
-    class Gov govern;
-    class PS automation;
-    class GHSSO,SCIM,GHTeams,SAML external;
-    class Audit,GHLogs,Reports evidence;
+  %% Do not conflate UAR decisions with automated removal; reconciliation was manual.

@@ -1,178 +1,140 @@
 # Cedarbridge Health System — Enterprise Identity Security & Governance
 
-**Microsoft Entra ID | GitHub Enterprise | OIDC | SCIM | Conditional Access | PIM | Identity Governance**
+**Microsoft Entra ID · GitHub Enterprise Managed Users · Zammad · OIDC/SAML · SCIM · PowerShell · Identity Governance**
 
-## The Problem: Who Still Has Access?
+> **An access change can be successful in the directory and still be incomplete in the application.** I encountered that during an employee transfer: Entra ID removed Jordan from the GitHub Developer group, but GitHub retained the entitlement until SCIM caught up. This lab follows access from approval and authentication through provisioning, review, removal, and final-state verification.
 
-Cedarbridge Health System (CHS) is a fictional healthcare organization integrating three newly acquired clinics.
+## The problem: Who still has access?
 
-As part of the acquisition, internal engineers and temporary contractors needed to collaborate on a clinical systems integration project using GitHub Enterprise.
+Cedarbridge Health System (CHS) is a **fictional healthcare organization** integrating three acquired clinics. Employees and contractors need controlled access to a clinical software integration project, while support staff need a secure way to handle access issues.
 
-But giving everyone access was only half the problem.
+The CISO wanted answers to three questions:
 
-The CISO needed answers to three questions:
+- **Who approved access?** Developers, project leads, and contractors need different permissions and documented business justification.
+- **Does access still match the job?** Transfers and contract endings can leave outdated entitlements behind.
+- **Can we prove access was actually removed?** A completed review or directory update does not by itself demonstrate revocation inside a downstream application.
 
-- **Who approved access?** Engineers and contractors needed different permissions, with a clear business justification.
-- **Who still needed access?** Promotions, transfers, and contract expirations could leave employees holding permissions they no longer required.
-- **How could IT prove access was revoked?** Removing someone from an identity-provider group didn't necessarily mean the downstream application had updated.
+**My objective:** Build and test workforce SSO, least-privilege application access, time-limited administration, approval and recertification workflows, and evidence-based remediation—not merely configure features.
 
-The organization needed a way to provision access efficiently while maintaining least privilege, accountability, and audit evidence.
+## What I built
 
-**My objective:** Build an identity security solution that centralized authentication, governed access requests, managed privileged access, and verified that permissions were removed when no longer justified.
+| Requirement | Implementation | Verification |
+| --- | --- | --- |
+| Workforce SSO | GitHub Enterprise Managed Users via **OIDC**; Zammad support desk via **SAML 2.0** | Successful application sign-ins; Entra sign-in records for Zammad |
+| Provisioning | Entra-to-GitHub **SCIM** users and groups | Provisioning events and GitHub team membership |
+| Application RBAC | GitHub Developer (**Write**) and Project Lead (**Maintain**) teams; Zammad **Customer** and **Agent** roles | Repository permission checks and actual support-ticket workflow |
+| Authentication controls | Entra Conditional Access, privileged-user phishing-resistant MFA policy, blocked legacy authentication; broader policies in Report-only | Policy configuration and relevant sign-in evaluations |
+| Privileged access | PIM-eligible Cloud Application Administrator, tested just-in-time activation; emergency accounts | PIM and sign-in evidence |
+| Access governance | Entitlement Management request/manager approval; GitHub Developer access review | Approval, denial, exported CSV, and reconciliation |
+| Identity lifecycle | Controlled Developer → Project Lead mover using Microsoft Graph PowerShell | Group-state validation plus GitHub SCIM/audit evidence |
 
-## The Solution
+**[View the identity architecture](Architecture/CHS-Identity-Architecture.md)**
 
-I designed and implemented a simulated enterprise IAM environment using **Microsoft Entra ID P2** as the workforce identity provider and **GitHub Enterprise Cloud** as the connected application.
+## Case study 1 — A contractor no longer needs access
 
-| Business requirement | My implementation |
-|---|---|
-| Centralize authentication | Integrated GitHub Enterprise Managed Users with Entra ID using OIDC SSO |
-| Automate application provisioning | Configured SCIM user and group provisioning |
-| Enforce least privilege | Mapped Entra groups to GitHub teams with Write and Maintain repository permissions |
-| Secure administrative access | Configured Conditional Access and PIM for time-limited privileged role activation |
-| Require business approval | Created an Entitlement Management access package with manager approval |
-| Review existing access | Conducted an Entra access review with documented approval and denial decisions |
-| Manage employee transfers | Used Microsoft Graph PowerShell to validate and execute a controlled role change |
-| Prove access removal | Correlated Entra audit records, provisioning activity, and GitHub audit logs |
+**Person:** Taylor Morgan, temporary integration contractor  
+**Entitlement:** `CHS-Integration-Developer-Access` / `SG-CHS-GH-Developers`
 
-## How I Tested It
+Taylor requested temporary GitHub Developer access. Daniel approved the entitlement request through an Entra access package. Later, Marcus reviewed the group and **denied Taylor's continued access** because the contractor assignment had ended. In the same review, Marcus approved Jordan's Developer access based on the business need **at that point in time**.
 
-### Scenario 1 — A Contractor No Longer Needs Access
+The exported review shows **one approval and one denial**, but both rows say **`Apply Result: Not applied`**. That is not evidence of automatic review enforcement. Taylor's access-package assignment was revoked separately; Jordan's Developer access was removed later as part of a different role-change event.
 
-**Employee:** Taylor Morgan, temporary integration contractor
+To reconcile decisions against actual application state, I checked the **All members** view in Entra and the GitHub `clinical-integration-developers` team linked to the IdP group. Both showed **zero members** at the final verification. This confirms the **current state** of the reviewed group/team; it does **not establish which operation removed each identity or that the review engine applied the decisions**.
 
-Taylor requested access to the GitHub Developer group through `CHS-Integration-Developer-Access`.
+**Evidence:** [Review decisions](Evidence/05-Access-Reviews/Access-Review-Individual-Results.png) · [Entra final group state](Evidence/05-Access-Reviews/UAR-Entra-Developer-Group-All-Members.png) · [GitHub team final state](Evidence/05-Access-Reviews/UAR-GitHub-Developer-Team-Final-State.png) · [CSV reconciliation](Evidence/05-Access-Reviews/CHS-UAR-Decision-Reconciliation.csv) · [Audit narrative](Documentation/CHS-UAR-Audit-Reconciliation.md)
 
-I configured a manager-approval workflow where Daniel Kim reviewed the request and approved access for the integration project.
+**Lesson:** A reviewer decision, a remediation action, and proof of the resulting access state are three separate records.
 
-Later, during an access review, Marcus Reid determined Taylor no longer had a valid business need.
+## Case study 2 — A transfer leaves old access behind
 
-**Actions and results:**
+**Person:** Jordan Lee  
+**Request:** `CHS-MOV-001` — Developer → Project Lead
 
-1. Taylor submitted an access-package request.
-2. Daniel approved the request.
-3. Entra assigned the approved entitlement.
-4. Marcus subsequently denied Taylor's access during recertification.
-5. Taylor's access-package assignment was separately revoked.
-6. Downstream SCIM deprovisioning was verified.
+Jordan needed Project Lead **Maintain** permissions and no longer needed the Developer **Write** entitlement. I used simulated HR/manager approval records and Microsoft Graph PowerShell to validate the request, add/verify the new role, and remove the old Developer group membership while preserving unrelated access.
 
-**Outcome:** The workflow demonstrated business approval, periodic review, and verified revocation—not just a recorded access-review decision.
+| Entra security group | Before | Verified final state |
+| --- | --- | --- |
+| `SG-CHS-GH-Developers` | Member | **Not a member** |
+| `SG-CHS-GH-ProjectLeads` | Not a member | **Member** |
+| `SG-CHS-CA-Pilot` | Member | Preserved |
+| `SG-CHS-EmployeePortal-Users` | Member | Preserved |
 
-[Manager approval evidence](Evidence/04-Entitlement-Management/Access-Package-Approval-Success.png)
+The difficult part was downstream consistency. Entra reflected the removal first, while GitHub still showed Jordan as a Developer. After subsequent SCIM synchronization, GitHub audit events showed the old external-group/team membership removed. I correlated the PowerShell reports, directory state, and application-side events rather than calling the change complete after the first successful command.
 
-[Access review results](Evidence/05-Access-Reviews/Access-Review-Individual-Results.png)
+**Evidence:** [Removal execution](Evidence/06-JML-Automation/JML-Developer-Removal-Execution.png) · [Final-state validation](Evidence/06-JML-Automation/JML-Mover-Final-State-Validation.png) · [GitHub removal audit](Evidence/06-JML-Automation/Jordan-GitHub-SCIM-Member-Removal.png)
 
-### Scenario 2 — A Promotion Creates an Access Risk
+**Lesson:** Reconciliation must extend beyond the identity provider and allow for asynchronous SCIM propagation.
 
-**Employee:** Jordan Lee  
-**Change request:** `CHS-MOV-001`  
-**Transition:** Developer → Project Lead
+## Case study 3 — Entra SSO does not equal administrator access
 
-Jordan was promoted to Project Lead and required Maintain access to the integration repository.
+**Application:** CHS Clinic Integration Support Desk (Zammad)  
+**Federation:** Microsoft Entra ID → Zammad via **SAML 2.0**
 
-The challenge was granting his new permissions while removing his old Developer entitlement without disrupting unrelated access.
+I configured a Zammad enterprise application in Entra using its SAML Entity ID and ACS callback URL, imported the Entra IdP signing certificate into Zammad, assigned test users, and verified Jordan's sign-in through Entra. The Entra sign-in log identified the correct CHS application and showed a successful event. Conditional Access evaluations were inspected separately; an application sign-in alone is **not proof** that MFA was enforced.
 
-I used Microsoft Graph PowerShell, simulated HR and approval records, and a controlled add–verify–remove process.
+I then tested **application-local authorization**, which SAML authentication does not automatically grant:
 
-| Security group | Before | After |
-|---|---|---|
-| GitHub Developers | Member | Removed |
-| GitHub Project Leads | Not a member | Member |
-| Conditional Access Pilot | Member | Preserved |
-| Employee Portal | Member | Preserved |
+| Test identity | Zammad role | Observed behavior |
+| --- | --- | --- |
+| Jordan | Customer | Could submit a ticket and view his own tickets; could not use agent ticket-management functions |
+| Marcus | Agent | Could access the support group, take ownership of Jordan's ticket, and send a public response |
+| Existing local administrator | Admin | Kept for administrative recovery during SSO testing |
 
-**The unexpected finding**
+**Test scenario:** Jordan reported an EHR integration portal access problem following his Developer → Project Lead transfer. Marcus accepted the ticket and responded with a plan to verify role memberships and downstream permissions. This was a **support workflow simulation**, not a live EHR access change.
 
-After removing Jordan from the Developer group in Entra ID, GitHub still displayed his previous membership.
+An initial SSO attempt produced a one-off HTTP 422 anti-CSRF error. Retrying worked and later attempts reached Microsoft sign-in normally. The root cause was **not independently confirmed**.
 
-I investigated the provisioning process and correlated the directory changes with GitHub enterprise audit events.
+**Evidence:** [Zammad SSO login option](Evidence/08-Zammad-SAML-RBAC/Zammad-CHS-Employee-SSO-Login.png) · [Jordan's initial Customer dashboard](Evidence/08-Zammad-SAML-RBAC/Zammad-Jordan-Customer-Initial-Dashboard.png) · [Marcus Agent group permission configuration](Evidence/08-Zammad-SAML-RBAC/Zammad-Marcus-Agent-Group-Permissions.png)
 
-The subsequent SCIM synchronization removed Jordan from the GitHub Developer external group and organization team.
+**Lesson:** Entra determines who can authenticate to the app through SAML; **Zammad still maintains its own Customer, Agent, and Admin permissions**. Those local roles need separate governance and periodic review.
 
-**Outcome:** All four Entra membership checks matched the expected final state, and GitHub audit logs separately confirmed removal of the obsolete entitlement.
+## Supporting security controls
 
-**Lesson learned:** A successful directory operation does not prove downstream access has been revoked. The IAM team must verify the actual application state.
+- **Conditional Access:** Pilot and privileged-user authentication policies were enabled; broader MFA and risk policies remained **Report-only**, not production-enforced. [Policy evidence](Evidence/01-Conditional-Access/CA-Policies-Overview.png)
+- **PIM:** Tested time-limited activation of an eligible Cloud Application Administrator role. [PIM evidence](Evidence/02-Privileged-Access/PIM-CloudAppAdmin-Successful-Activation.png)
+- **GitHub RBAC:** Set default repository permission to **None** and mapped Developer and Project Lead teams to **Write** and **Maintain**. [Repository permissions](Evidence/03-OIDC-SCIM/GitHub-Team-Repository-Permissions.png)
+- **SAML fault test:** In a separate Microsoft Entra SAML Toolkit lab app, intentionally mismatched an ACS URL, reproduced `AADSTS50011`, restored it, and verified authentication. This was **not** the Zammad application. [Fault evidence](Evidence/07-SAML-Federation/SAML-ACS-Mismatch-AADSTS50011.png) · [Recovery evidence](Evidence/07-SAML-Federation/SAML-Authorized-SignIn.png)
 
-[PowerShell removal execution](Evidence/06-JML-Automation/JML-Developer-Removal-Execution.png)
+## Automation and audit evidence
 
-[Final Entra access validation](Evidence/06-JML-Automation/JML-Mover-Final-State-Validation.png)
+The existing `Automation/` folder contains **two PowerShell scripts**, synthetic HR/approval inputs, and sample execution/validation reports:
 
-[GitHub SCIM removal audit](Evidence/06-JML-Automation/Jordan-GitHub-SCIM-Member-Removal.png)
-
-## Supporting Security Controls
-
-### Conditional Access
-
-Configured policies for baseline MFA, phishing-resistant authentication for privileged identities, and legacy authentication blocking.
-
-Additional risk-based policies and a broader MFA rollout policy were configured in Report-only mode.
-
-[Conditional Access policy overview](Evidence/01-Conditional-Access/CA-Policies-Overview.png)
-
-### Privileged Identity Management
-
-Configured an eligible Cloud Application Administrator role and validated time-limited PIM activation.
-
-Two emergency administrator accounts were also tested for successful FIDO2 sign-in.
-
-[PIM activation evidence](Evidence/02-Privileged-Access/PIM-CloudAppAdmin-Successful-Activation.png)
-
-### Application RBAC
-
-Configured GitHub Developer and Project Lead teams with Write and Maintain permissions. Default repository permission was set to None.
-
-[GitHub repository permissions](Evidence/03-OIDC-SCIM/GitHub-Team-Repository-Permissions.png)
-
-### SAML Federation
-
-Integrated a simulated Employee Operations Portal using SAML 2.0.
-
-Tested successful sign-in, application assignment enforcement, and an intentional ACS URL misconfiguration that produced `AADSTS50011`. Restored the configuration and verified authentication.
-
-[SAML authentication failure](Evidence/07-SAML-Federation/SAML-ACS-Mismatch-AADSTS50011.png)
-
-[SAML successful sign-in](Evidence/07-SAML-Federation/SAML-Authorized-SignIn.png)
-
-## Automation
-
-The `Automation/` folder contains two PowerShell scripts, simulated HR request and approval records, and six execution/validation reports.
-
-- **Remove-CHSDeveloper.ps1:** Validates the simulated role change, requires operator confirmation, and supports removal of obsolete Developer group access.
-- **CHS-TestMoverFinalState.ps1:** Verifies the expected Entra group memberships and exercises simulated invalid-request checks.
-- **Sample-Inputs:** Fictional HR transfer and approval CSVs.
-- **Sample-Reports:** Baseline, dry-run, execution, removal, exception-testing, and final-state evidence.
-
-The original Mover exercise included manual GitHub verification. The published scripts do not independently verify downstream GitHub entitlements, and their sanitized versions have not been retested against the tenant.
-
-## Security Assessment
-
-During testing, I also identified control gaps requiring further evaluation:
-
-| Finding | Status |
-|---|---|
-| Limited baseline MFA scope | Broader Report-only policy evaluated |
-| Original administrator retained standing Global Administrator access | Remediation recommended |
-| SCIM credential expiration and rotation | Operational dependency documented |
-| SAML signing certificate rollover | Replacement staged; rollover incomplete |
-| Delayed downstream access changes | Observed discrepancy resolved; automated drift monitoring recommended |
-
-Rather than presenting every configuration as production-ready, I documented the outstanding risks and proposed remediation.
-
-## Key Takeaways
-
-**Identity governance requires more than assigning access.**
-
-This project demonstrated how business approvals, application provisioning, privileged access controls, periodic reviews, and audit evidence fit together.
-
-The biggest lesson came from investigating the gap between Entra ID and GitHub. The directory showed the requested change, but verifying the actual security outcome required following it all the way to the application.
-
-## Technology Stack
-
-- **Identity:** Microsoft Entra ID P2, Active Directory concepts, Microsoft Graph
-- **Authentication:** OIDC, SAML 2.0, MFA, Conditional Access, FIDO2
-- **Governance:** PIM, Entitlement Management, Access Reviews, RBAC
-- **Provisioning:** SCIM, GitHub Enterprise Managed Users
-- **Automation:** PowerShell 7, Microsoft Graph PowerShell SDK
-- **Frameworks:** NIST SP 800-53, ISO 27001, CIS Controls
-
-*This project uses a fictional healthcare environment and simulated employee records. It is not a production deployment or formal compliance certification.*
+- `Remove-CHSDeveloper.ps1` — validates the simulated mover request, supports dry-run behavior, and requires explicit operator confirmation for removal.
+- `CHS-TestMoverFinalState.ps1` — checks expected Entra memberships and runs simulated negative-request tests.
+
+The published sanitized scripts have **not** been re-tested against the tenant, and they do **not** perform GitHub-side verification themselves. That verification was a separate manual audit step.
+
+For access reviews, I exported a **sanitized Entra decision CSV** and built a **read-only decision-to-remediation reconciliation**. Neither scheduled CSV exports nor automated UAR enforcement were implemented in this lab. See the [UAR audit narrative](Documentation/CHS-UAR-Audit-Reconciliation.md) and [decision reconciliation CSV](Evidence/05-Access-Reviews/CHS-UAR-Decision-Reconciliation.csv).
+
+## Findings and control limitations
+
+| Finding | Actual status / next control |
+| --- | --- |
+| Review CSV shows `Not applied` | Decisions recorded; separately performed removals and final-state checks documented, **not** review auto-enforcement |
+| Entra vs. GitHub propagation delay | Observed and resolved; ongoing drift monitoring not implemented |
+| Zammad local Agent/Admin roles | Functionally tested; automatic recertification of local roles not implemented |
+| Broader MFA / identity-risk policies | **Report-only**; no claim of enforced risk blocking |
+| Original standing Global Administrator | Retained; privileged-access reduction remains an identified gap |
+| GitHub SCIM provisioning credential | Integration tested; automated credential rotation not implemented |
+| SAML signing certificate rollover (toolkit lab) | Replacement staged; successful rollover not demonstrated |
+| JML automation | Mover scenario tested; full HRIS-driven joiner/leaver orchestration not implemented |
+
+This is a **fictional healthcare lab**, not a production deployment, a HIPAA compliance attestation, or a certified security assessment. All examples use test identities and no patient data.
+
+## Repository map
+
+```text
+Architecture/         Identity data flows and trust boundaries
+Automation/           PowerShell scripts, synthetic inputs, sample reports
+Demo/                 Demo assets and walkthrough materials
+Documentation/        Standards, SOP, runbooks, control assessment, UAR reconciliation
+Evidence/
+  01-Conditional-Access/ ... 07-SAML-Federation/   Existing tests
+  05-Access-Reviews/                              Export reconciliation and final-state checks
+  08-Zammad-SAML-RBAC/                             SSO and application-role evidence
+README.md             Project overview and linked case studies
+```
+
+**Tools:** Microsoft Entra ID P2, Microsoft Graph PowerShell, PowerShell 7, GitHub Enterprise Cloud (EMU), SCIM, OIDC, SAML 2.0, Zammad, Conditional Access, PIM, Entitlement Management, Access Reviews, FIDO2.
+
+*Portfolio note: this repository presents tested outcomes and explicitly separates observed configuration, reviewer decisions, manual remediation, and proposed improvements.*
