@@ -21,9 +21,9 @@ Jordan, now a Project Lead, submits an EHR integration access issue. Marcus, a s
 
 ## Evidence available in this update
 
-- [CHS SSO login option](../Evidence/08-Zammad-SAML-RBAC/Zammad-CHS-Employee-SSO-Login.png)
-- [Jordan Customer dashboard before the ticket test](../Evidence/08-Zammad-SAML-RBAC/Zammad-Jordan-Customer-Initial-Dashboard.png)
-- [Marcus Agent group permission configuration](../Evidence/08-Zammad-SAML-RBAC/Zammad-Marcus-Agent-Group-Permissions.png)
+- [CHS SSO login option](../Evidence/09-Zammad-SAML-RBAC/Zammad-CHS-Employee-SSO-Login.png)
+- [Jordan Customer dashboard before the ticket test](../Evidence/09-Zammad-SAML-RBAC/Zammad-Jordan-Customer-Initial-Dashboard.png)
+- [Marcus Agent group permission configuration](../Evidence/09-Zammad-SAML-RBAC/Zammad-Marcus-Agent-Group-Permissions.png)
 
 **Additional author-held screenshots to publish (not included in this update):** Jordan's submitted ticket and Marcus's ticket owner/response view, preferably with test-person identifiers and message content sanitized. These strengthen the behavioral result beyond configuration evidence.
 

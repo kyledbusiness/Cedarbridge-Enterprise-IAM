@@ -1,69 +1,47 @@
-# CHS Identity Architecture
+# Cedarbridge Health System | Identity architecture
 
-The diagram distinguishes **Entra authentication and governance**, **GitHub SCIM provisioning**, and **Zammad application-local authorization**. Arrows show configured or tested flows; dotted lines provide supporting evidence paths.
+One diagram shows the **implemented trust boundaries**. Solid paths represent configured or tested identity flows; dashed paths represent governance inputs and evidence. An access-review **decision** is not drawn as an automatic revocation.
 
 ```mermaid
 flowchart TB
-  %% Cedarbridge Health System fictional IAM lab
-  %% Solid connectors are tested/configured integrations, dashed are supporting workflow/evidence.
-  subgraph People["PERSONAS & BUSINESS INPUTS"]
-    Staff["Jordan / Taylor / Marcus<br/>CHS workforce identities"]
-    Admin["Sophia<br/>Privileged administrator"]
-    Approval["Daniel / Marcus<br/>Manager approvals and access review"]
-    HR["Simulated HR transfer + approval CSVs"]
+  Users["CHS workforce<br/>Jordan · Taylor · Marcus"]
+  Admin["Sophia<br/>privileged admin"]
+  Manager["Daniel / Marcus<br/>approvals & access reviews"]
+  HR["Simulated HR move<br/>approval CSVs"]
+
+  subgraph Entra["Microsoft Entra ID"]
+    Auth["Workforce authentication<br/>Conditional Access"]
+    PIM["PIM eligible role<br/>JIT activation"]
+    Gov["Access package<br/>Access review decisions"]
+    Groups["Group assignments<br/>Developer · Project Lead"]
   end
 
-  subgraph Entra["MICROSOFT ENTRA ID — WORKFORCE TENANT"]
-    SSO["Identity provider<br/>Workforce authentication"]
-    CA["Conditional Access<br/>Enabled and Report-only policies"]
-    PIM["Privileged Identity Management<br/>Eligible role / JIT activation"]
-    GOV["Entitlement Management<br/>Access packages + access reviews"]
-    Groups["Security groups / assignments<br/>Developers, Project Leads, App Users"]
-    Logs["Sign-in, audit, provisioning<br/>and PIM logs"]
+  subgraph Apps["Downstream applications"]
+    GitHub["GitHub Enterprise Managed Users<br/>OIDC SSO"]
+    Teams["GitHub users & teams<br/>SCIM · Write / Maintain RBAC"]
+    Zammad["Zammad support desk<br/>SAML 2.0 SSO"]
+    Roles["Local Zammad roles<br/>Customer · Agent · Admin"]
   end
 
-  subgraph GitHub["GITHUB ENTERPRISE MANAGED USERS"]
-    GHSSO["OIDC enterprise SSO"]
-    SCIM["SCIM users / group sync"]
-    Teams["Organization teams + RBAC<br/>Developer Write / Lead Maintain"]
-    GHAudit["GitHub team and audit evidence"]
-  end
+  PS["Microsoft Graph PowerShell<br/>controlled mover"]
+  Evidence["Sign-in, review, PowerShell,<br/>SCIM & application evidence"]
 
-  subgraph Zammad["CHS CLINIC INTEGRATION SUPPORT DESK — ZAMMAD"]
-    Saml["SAML 2.0 SSO<br/>Entra signing certificate verified"]
-    Roles["Local app roles<br/>Customer / Agent / Admin"]
-    Ticket["Jordan creates ticket<br/>Marcus owns / responds"]
-  end
-
-  subgraph Lifecycle["JML & EVIDENCE"]
-    PowerShell["Microsoft Graph PowerShell<br/>Validate → Dry-run → remove old membership"]
-    Results["CSV decisions / logs / screenshots<br/>Manual state reconciliation"]
-  end
-
-  Staff --> SSO
+  Users --> Auth
   Admin --> PIM
-  PIM --> SSO
-  CA -.-> SSO
-  Approval --> GOV
-  GOV --> Groups
-  HR --> PowerShell
-  PowerShell --> Groups
-  Groups -->|Assigned users + groups| SCIM
-  SSO -->|OIDC| GHSSO
-  GHSSO --> Teams
-  SCIM --> Teams
-  Teams -.-> GHAudit
-  SSO -->|SAML 2.0| Saml
-  Saml --> Roles
-  Roles --> Ticket
-  SSO -.-> Logs
-  GOV -.-> Logs
-  Groups -.-> Logs
-  Logs -.-> Results
-  GHAudit -.-> Results
-  Ticket -.-> Results
-
-  %% Do not conflate UAR decisions with automated removal; reconciliation was manual.
+  PIM --> Auth
+  Manager -.-> Gov
+  Gov -.-> Groups
+  HR --> PS
+  PS --> Groups
+  Auth -->|OIDC sign-in| GitHub
+  Groups -->|SCIM provisioning| Teams
+  GitHub --> Teams
+  Auth -->|SAML sign-in| Zammad
+  Zammad --> Roles
+  Groups -.-> Evidence
+  Gov -.-> Evidence
+  Teams -.-> Evidence
+  Roles -.-> Evidence
 ```
 
-**Control boundaries:** Entra app assignment is not the same as Zammad Agent/Customer permissions; access-review decisions are not necessarily auto-applied; SCIM group changes can lag directory updates.
+**Important boundaries:** OIDC/SAML establishes authentication; SCIM synchronizes GitHub identities and groups; GitHub and Zammad enforce their own application permissions. Conditional Access has both enabled and Report-only policies. Review decisions were not demonstrated as automatically applied. The PowerShell mover required separate GitHub verification because SCIM propagation was asynchronous.
