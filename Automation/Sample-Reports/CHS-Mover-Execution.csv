@@ -1,2 +1,0 @@
-RequestId,User,Action,ApprovalSource,Status,Verified,Timestamp
-CHS-MOV-001,jordan.lee@chs.example,ADD_PROJECT_LEAD,SIMULATED_CSV,ALREADY PRESENT,True,2026-11-06T19:55:00.0734360-05:00

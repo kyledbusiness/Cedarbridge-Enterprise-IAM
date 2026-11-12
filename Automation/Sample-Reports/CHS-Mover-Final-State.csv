@@ -1,5 +1,0 @@
-Timestamp,RequestId,User,Group,ExpectedMember,ActualMember,Result
-2026-11-07T08:39:19.9384310-05:00,CHS-MOV-001,jordan.lee@chs.example,SG-CHS-CA-Pilot,True,True,MATCH
-2026-11-07T08:39:19.9384310-05:00,CHS-MOV-001,jordan.lee@chs.example,SG-CHS-GH-Developers,False,False,MATCH
-2026-11-07T08:39:19.9384310-05:00,CHS-MOV-001,jordan.lee@chs.example,SG-CHS-GH-ProjectLeads,True,True,MATCH
-2026-11-07T08:39:19.9384310-05:00,CHS-MOV-001,jordan.lee@chs.example,SG-CHS-EmployeePortal-Users,True,True,MATCH
