@@ -1,4 +1,4 @@
-# Enterprise Identity Security & Governance | Microsoft Entra ID
+# From Authentication to Access Governance | Enterprise IAM Engineering with Microsoft Entra ID
 
 **GitHub Enterprise Managed Users · OIDC · SCIM · Conditional Access · PIM · Identity Governance · Zammad SAML SSO**
 
