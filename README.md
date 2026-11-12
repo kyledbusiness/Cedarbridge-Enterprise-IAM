@@ -1,140 +1,99 @@
 # Cedarbridge Health System | Enterprise Identity Security & Governance
 
-**Microsoft Entra ID · GitHub Enterprise Managed Users · Zammad · OIDC / SAML · SCIM · Conditional Access · PIM · Identity Governance · PowerShell**
+**Microsoft Entra ID · GitHub Enterprise Managed Users · OIDC · SCIM · Conditional Access · PIM · Entitlement Management · Access Reviews · Zammad SAML SSO**
 
-> **An access request is easy to approve. Proving that access is still appropriate six weeks later—and truly gone when it isn't—is harder.**
+> **Getting someone into an application is the easy part. Can you explain who approved that access, what they can do once inside, and whether they still have it when the business need disappears?**
 
-That is the problem I set out to investigate in this lab. I built a fictional healthcare identity environment, followed two employees through different access changes, and traced what happened in both Microsoft Entra ID and the applications themselves. The most useful finding was not a successful configuration: it was discovering that Entra could show an entitlement removed while GitHub still showed the old team membership until SCIM synchronization caught up.
+That question drove this lab. I built the identity environment for **Cedarbridge Health System (CHS)**, a fictional healthcare organization integrating three newly acquired clinics. Its clinical integration team needed controlled GitHub access, temporary contractors needed an accountable approval process, and employees needed an internal support desk. A successful sign-in alone would not satisfy those requirements.
 
-## The business problem
+I followed one access story from the initial security controls to an access request, a later recertification, and a second application's authorization test. Along the way, I learned that **review decisions, directory memberships, and downstream application access are three different types of evidence**.
 
-Cedarbridge Health System (CHS) is a **fictional healthcare organization** integrating three acquired clinics. Its clinical integration engineers and temporary contractors collaborate in GitHub Enterprise. Its support team also needs an internal desk for access questions. As people join projects, change roles, and finish assignments, the same identity can accumulate permissions across several systems.
+**Start here:** [Identity architecture](Architecture/CHS-Identity-Architecture.md) · [Evidence index](Evidence/README.md)
 
-The CISO's challenge was to answer three questions with evidence:
+## The foundation — secure the doors before opening them
 
-1. **Who is allowed in—and who approved it?** Access should depend on organizational policy, role, and business need.
-2. **Does access change when the job changes?** Manager decisions, access reviews, and transfers must result in the appropriate entitlements.
-3. **How do we know the change reached the application?** Directory success, review decisions, and actual downstream access are not interchangeable.
+CHS needed a central identity provider, predictable application permissions, and a way to manage administrators without giving everyone standing privileged access.
 
-I implemented the controls, tested them using fictional identities, documented unexpected behavior, and recorded where manual verification was still necessary.
-
-**Explore:** [Architecture](Architecture/CHS-Identity-Architecture.md) · [Evidence guide](Evidence/README.md) · [UAR reconciliation](Documentation/CHS-UAR-Audit-Reconciliation.md) · [Zammad test record](Documentation/CHS-Zammad-SSO-RBAC-Test.md)
-
-## The identity foundation: establish trust before granting access
-
-Before Taylor could request access or Jordan could change roles, I had to establish how CHS users sign in, how accounts reach applications, and who can administer those connections.
-
-| Control | What I configured | Why it mattered |
+| Control | Implementation | Security purpose |
 | --- | --- | --- |
-| **OIDC SSO** | Integrated Microsoft Entra ID with **GitHub Enterprise Cloud (Enterprise Managed Users)** for workforce sign-in. | Centralized identity authentication rather than relying on separately managed GitHub credentials. |
-| **SCIM provisioning** | Configured Entra-to-GitHub user/group synchronization, tested provisioning, and examined downstream membership changes. | Provisioning is a separate process from signing in; changes are not necessarily instantaneous. |
-| **Application RBAC** | Linked Entra Developer and Project Lead groups to GitHub teams with **Write** and **Maintain** permissions; set repository default permission to **None**. | A valid sign-in should not automatically grant broad repository access. |
-| **Conditional Access** | Configured enabled pilot/privileged policies and legacy-authentication controls; evaluated broader MFA/risk policies in **Report-only** mode. | Enforces selected authentication requirements while keeping unevaluated rollout changes visible as tests, not deployed controls. |
-| **PIM / JIT** | Tested eligible **Cloud Application Administrator** activation and limited-duration privileged access; tested two emergency-account sign-ins. | Administrative privilege should be activated when needed, not treated as ordinary standing access. |
+| **GitHub OIDC SSO** | Integrated Microsoft Entra ID with **GitHub Enterprise Cloud (Enterprise Managed Users)**. | Workforce users authenticate through the organization's identity provider. |
+| **SCIM provisioning** | Configured user and group provisioning from Entra to GitHub, with provisioning and membership checks. | An identity can be authenticated without automatically having the correct application entitlements; provisioning must be verified separately. |
+| **GitHub RBAC** | Mapped Developer and Project Lead groups to GitHub teams with **Write** and **Maintain** permissions; set the default repository permission to **None**. | Access is assigned according to role, not simply because a person has an account. |
+| **Conditional Access** | Tested enabled MFA/privileged-account controls and legacy-authentication restrictions; kept broader MFA and risk policies in **Report-only**. | Reduce authentication risk while clearly distinguishing enforced controls from simulated policy evaluations. |
+| **PIM / JIT** | Validated time-limited activation of an eligible **Cloud Application Administrator** role and tested two emergency administrator sign-ins. | Separate normal access from privileged administrative activity. |
 
-**Evidence:** [Conditional Access policies](Evidence/01-Conditional-Access/CA-Policies-Overview.png) · [PIM activation](Evidence/02-Privileged-Access/PIM-CloudAppAdmin-Successful-Activation.png) · [SCIM provisioning](Evidence/03-OIDC-SCIM/GitHub-SCIM-Provisioning-Overview.png) · [GitHub team permissions](Evidence/03-OIDC-SCIM/GitHub-Team-Repository-Permissions.png)
+**What I checked:** [Conditional Access policy overview](Evidence/01-Conditional-Access/CA-Policies-Overview.png) · [PIM activation](Evidence/02-Privileged-Access/PIM-CloudAppAdmin-Successful-Activation.png) · [SCIM provisioning](Evidence/03-OIDC-SCIM/GitHub-SCIM-Provisioning-Overview.png) · [GitHub team permissions](Evidence/03-OIDC-SCIM/GitHub-Team-Repository-Permissions.png)
 
-The controls above are the foundation. The following events show how they behaved when real access decisions had to be made.
+With that foundation established, CHS could grant access through a documented business decision instead of an ad hoc group change.
 
-## The access lifecycle: four connected investigations
+## The access story — approve, review, and verify
 
-### 1. Request and approve — Taylor joins the integration work
+### Chapter 1 — Taylor needs access, but not forever
 
-**Business need:** Taylor Morgan is a temporary contractor who needs Developer access to contribute to the clinical integration project. Granting access informally would make it difficult to identify who authorized it or when it should expire.
+**The request.** Taylor Morgan, a temporary contractor, needed Developer access to the clinical integration team's GitHub repositories. The business needed to know *who approved it*, *what entitlement was granted*, and *why that access existed*.
 
-I created the Entra Entitlement Management access package **`CHS-Integration-Developer-Access`** with a manager-approval policy and a security-group resource. Taylor submitted a request; **Daniel Kim approved it**. The approved entitlement made Taylor eligible for the Developer group, which was synchronized to GitHub through the configured provisioning integration.
+I configured the Entra Entitlement Management access package **`CHS-Integration-Developer-Access`** with a security-group resource and manager approval. Taylor submitted a request, and **Daniel Kim approved** it. GitHub's group-based provisioning and team permissions provided the downstream authorization design, rather than assigning Taylor broad organization-level privilege.
 
-This tested the handoff between **business approval → group-based authorization → downstream provisioning**. The GitHub team mapped to the Developer role with Write permission; access did not require granting Taylor an administrator role.
+**Evidence:** [Access package approval](Evidence/04-Entitlement-Management/Access-Package-Approval-Success.png) · [Provisioning state](Evidence/03-OIDC-SCIM/GitHub-SCIM-Provisioning-Overview.png) · [Team-level RBAC](Evidence/03-OIDC-SCIM/GitHub-Team-Repository-Permissions.png)
 
-**Evidence:** [Manager approval](Evidence/04-Entitlement-Management/Access-Package-Approval-Success.png) · [SCIM provisioning](Evidence/03-OIDC-SCIM/GitHub-SCIM-Provisioning-Overview.png) · [GitHub role mapping](Evidence/03-OIDC-SCIM/GitHub-Team-Repository-Permissions.png)
+**The next question:** The approval made sense when Taylor joined the project. Would it still make sense after the contract ended?
 
-**Next question:** Approval was justified when Taylor joined. What happens when the contract ends?
+### Chapter 2 — An access review isn't the same as revocation
 
-### 2. Re-certify and reconcile — Taylor's access is no longer justified
+**The review.** Marcus Reid reviewed membership in **`SG-CHS-GH-Developers`**. He **denied Taylor's continued Developer access** because the contractor assignment ended, while **approving Jordan Lee's** Developer access based on its business need *at the time of review*.
 
-**Business change:** Taylor's contractor assignment ended. Marcus Reid conducted an Entra access review of **`SG-CHS-GH-Developers`**. He **denied Taylor's continued access** and **approved Jordan's**, based on Jordan's then-current Developer responsibilities.
+I exported the access-review decisions as a sanitized CSV and reconciled them with separate actions and snapshots from Entra and GitHub:
 
-I exported the review decisions to CSV and reconciled the records against separate remediation and final-state evidence:
-
-| Identity | Review decision | Review export: Apply Result | Independently checked outcome |
-| --- | --- | --- | --- |
-| Jordan | Approve (at the time of review) | `Not applied` | Developer access removed later through a separate mover workflow |
-| Taylor | Deny | `Not applied` | Access-package assignment revoked separately; final Entra group and GitHub team both showed zero members |
-
-The review was **active** when inspected. Its decisions were recorded but **not shown as applied by the review system**. The final snapshots prove that the Entra Developer group and linked GitHub Developer team had **zero members at the time of verification**; they do **not** prove that the review automatically enforced removal, nor do they establish Taylor's precise removal event timestamp.
-
-**Evidence:** [Review results](Evidence/05-Access-Reviews/Access-Review-Individual-Results.png) · [Reconciliation CSV](Evidence/05-Access-Reviews/CHS-UAR-Decision-Reconciliation.csv) · [Entra final group state](Evidence/05-Access-Reviews/UAR-Entra-Developer-Group-All-Members.png) · [GitHub final team state](Evidence/05-Access-Reviews/UAR-GitHub-Developer-Team-Final-State.png) · [Audit interpretation](Documentation/CHS-UAR-Audit-Reconciliation.md)
-
-**What I learned:** A reviewer decision, a remediation action, and evidence of the final permissions are three distinct parts of an access review. A CSV export is useful, but reconciling it to the application is what makes it audit-relevant.
-
-**Next question:** Jordan's Developer access was appropriate during the review. What if his responsibilities change the following week?
-
-### 3. Move without permission creep — Jordan becomes Project Lead
-
-**Change request:** `CHS-MOV-001` · **Jordan Lee: Developer → Project Lead**
-
-Jordan needed **Maintain** permissions as Project Lead, but should no longer retain the former **Developer Write** entitlement. I used fictional HR transfer and approval CSVs, Microsoft Graph PowerShell, and a controlled **add → verify → remove** process to validate the change without stripping unrelated access.
-
-| Entra group | Before | Verified final state |
+| What the reviewer decided | What the export showed | What I verified separately |
 | --- | --- | --- |
-| `SG-CHS-GH-Developers` | Member | **Not a member** |
-| `SG-CHS-GH-ProjectLeads` | Not a member | **Member** |
-| `SG-CHS-CA-Pilot` | Member | **Preserved** |
-| `SG-CHS-EmployeePortal-Users` | Member | **Preserved** |
+| **Taylor — Deny** | `Apply Result: Not applied` | His access-package assignment was separately revoked; the Entra Developer group and linked GitHub Developer team later both showed **0 members**. |
+| **Jordan — Approve** | `Apply Result: Not applied` | His Developer membership was changed after the review during a separate exercise outside this repository's scope. The final group/team snapshots therefore also show no Jordan membership. |
 
-I also exercised simulated invalid-request checks to demonstrate that the workflow should reject a denied approval or unauthorized role rather than silently process it.
+**The finding:** The review was still **Active** when inspected. The recorded decisions did **not** show automatic application by the review engine. Likewise, a screenshot of an empty group proves the **state at the time of capture**, not who removed a specific user or precisely when that happened.
 
-**The unexpected result:** Entra showed the Developer group removal, but GitHub still displayed Jordan in the old team. I investigated the delay rather than treating a successful Graph command as proof of access removal. After SCIM synchronization, GitHub audit activity showed the Developer external-group/team membership removed. The final verification combined directory checks with GitHub-side evidence.
+That distinction is the heart of the governance work: **decision → action → verified current state**. For a formal audit, I'd also retain the corresponding removal events and timestamps to establish causality, not only the final snapshots.
 
-**Evidence:** [Removal execution](Evidence/06-JML-Automation/JML-Developer-Removal-Execution.png) · [Final-state validation](Evidence/06-JML-Automation/JML-Mover-Final-State-Validation.png) · [GitHub SCIM removal audit](Evidence/06-JML-Automation/Jordan-GitHub-SCIM-Member-Removal.png)
+**Evidence:** [Review decisions](Evidence/05-Access-Reviews/Access-Review-Individual-Results.png) · [Sanitized reconciliation CSV](Evidence/05-Access-Reviews/CHS-UAR-Decision-Reconciliation.csv) · [Entra final membership](Evidence/05-Access-Reviews/UAR-Entra-Developer-Group-All-Members.png) · [GitHub final membership](Evidence/05-Access-Reviews/UAR-GitHub-Developer-Team-Final-State.png) · [Audit interpretation](Documentation/CHS-UAR-Audit-Reconciliation.md)
 
-The `Automation/` folder contains the supporting PowerShell scripts, synthetic request inputs, and sample reports. **Limitations:** the published sanitized scripts have not been retested against the live tenant; the scripts do not independently verify GitHub permissions, and manual downstream validation remained part of the tested procedure.
+**The next question:** CHS can manage *who is assigned* to GitHub. But can a second application distinguish a user who needs help from the support agent who handles that request?
 
-**Next question:** When Jordan experiences an access issue after the move, can he request help without receiving unnecessary administrative privileges?
+### Chapter 3 — A successful login shouldn't make someone an administrator
 
-### 4. Support the change — Zammad SSO and least-privilege roles
+**The support scenario.** CHS introduced an internal help desk using **Zammad**. Jordan submitted a simulated **EHR Integration Portal access issue**; Marcus handled the request. The ticket did not change any real EHR permissions or patient records.
 
-**Support scenario:** Jordan reports an EHR integration portal access problem after his role change. Marcus is the support agent responsible for investigating it. This is a **simulated support ticket**, not a live EHR permission change.
+I connected Zammad to Entra using **SAML 2.0**. The enterprise application supplied the Entity ID and ACS endpoint; Zammad trusted Entra's IdP login information and public signing certificate. I assigned test users and verified Jordan's successful Zammad application sign-in in Entra's logs, then reviewed the applicable Conditional Access results. A successful SAML login alone was **not** treated as proof that fresh MFA occurred.
 
-I connected the **CHS Clinic Integration Support Desk (Zammad)** to Entra ID using **SAML 2.0**: configured the enterprise application's Entity ID and ACS URL, provided Zammad with Entra's IdP login information and public signing certificate, assigned test users, and verified a successful Jordan sign-in in Entra's application logs. I inspected applicable Conditional Access evaluations separately rather than assuming that SSO alone proves MFA enforcement.
+The more revealing test came *after* authentication:
 
-The crucial test came *after* authentication. Zammad maintains its own application roles:
-
-| Identity | Local Zammad role | Tested behavior |
+| Identity | Zammad authorization | Observed behavior |
 | --- | --- | --- |
-| Jordan | **Customer** | Created a ticket and viewed only his own tickets; no agent management functions |
-| Marcus | **Agent** (Users support group) | Took ownership of Jordan's ticket and sent a public reply |
-| Original Zammad administrator | **Admin** | Retained local recovery access during SSO configuration |
+| **Jordan — Customer** | End-user ticket access | Submitted a support request, viewed his own tickets, and could not access agent ticket-management functions. |
+| **Marcus — Agent** | `Users` ticket group with Full permission | Took ownership of Jordan's ticket and sent a public response. |
+| **Initial administrator — Admin** | Local administrative recovery | Kept existing administrative access available while SAML was tested; this was not an Entra-managed privileged-role mapping. |
 
-A first SSO attempt returned a transient HTTP 422 anti-CSRF error. Retrying worked, and subsequent login attempts behaved normally; the underlying cause was **not independently determined**.
+**The result:** Entra authenticated the users; **Zammad's local roles decided what they could do**. A review of Entra application assignments would not, by itself, recertify Zammad's Agent or Admin roles.
 
-**Evidence:** [Zammad SSO login](Evidence/09-Zammad-SAML-RBAC/Zammad-CHS-Employee-SSO-Login.png) · [Jordan Customer view](Evidence/09-Zammad-SAML-RBAC/Zammad-Jordan-Customer-Initial-Dashboard.png) · [Marcus Agent group permissions](Evidence/09-Zammad-SAML-RBAC/Zammad-Marcus-Agent-Group-Permissions.png) · [Detailed test record](Documentation/CHS-Zammad-SSO-RBAC-Test.md)
+**Evidence:** [CHS SSO option](Evidence/06-Zammad-SAML-RBAC/Zammad-CHS-Employee-SSO-Login.png) · [Jordan's Customer dashboard](Evidence/06-Zammad-SAML-RBAC/Zammad-Jordan-Customer-Initial-Dashboard.png) · [Marcus's Agent permissions](Evidence/06-Zammad-SAML-RBAC/Zammad-Marcus-Agent-Group-Permissions.png) · [SAML/RBAC test notes](Documentation/CHS-Zammad-SSO-RBAC-Test.md)
 
-*Additional ticket-submission and agent-response screenshots were captured during the test; add sanitized copies to this evidence folder before linking them here.*
+*Jordan's submitted-ticket and Marcus's response screenshots were captured during testing. They can be added here once their sanitized copies are placed in the evidence folder.*
 
-**What I learned:** Entra controls who can **authenticate** through SAML; Zammad controls what that user is **authorized** to do. An access review of Entra assignments alone would not recertify Zammad's local Agent/Admin roles.
+## What worked—and what remains open
 
-## Diagnostic testing and control gaps
-
-I also tested a **separate Entra SAML Toolkit application**: deliberately misconfigured its ACS URL, reproduced `AADSTS50011`, restored the correct URL, and confirmed successful sign-in. This test was **not** performed against the Zammad production-like integration. [Failure](Evidence/07-SAML-Federation/SAML-ACS-Mismatch-AADSTS50011.png) · [Recovery](Evidence/07-SAML-Federation/SAML-Authorized-SignIn.png)
-
-| Control gap | Verified scope / remaining work |
+| Area | Tested outcome or limitation |
 | --- | --- |
-| Broader baseline MFA and risk policies | **Report-only**; not claimed as enforced globally |
-| Standing Global Administrator assignment | Identified; not remediated |
-| Access review application | Decisions recorded; exported `Not applied` and separately verified final state |
-| Cross-system access drift | Investigated manually after a SCIM lag; no scheduled drift detection |
-| Zammad local Agent/Admin recertification | Role separation tested; no automated local-role access review |
-| SCIM provisioning credential lifecycle | Integration operational; scheduled credential rotation not implemented |
-| SAML Toolkit certificate rollover | Replacement staged; successful rollover not demonstrated |
-| JML and UAR automation | Mover tested; no full HRIS-driven joiner/leaver flow or scheduled UAR export |
+| **Workforce authentication and provisioning** | GitHub OIDC and SCIM were configured and exercised; provisioning is asynchronous and final application state must be checked. |
+| **Administrative controls** | PIM activation was tested; an original standing Global Administrator assignment remained an identified risk. |
+| **Conditional Access** | Selected policies were enabled; broader MFA/risk controls remained **Report-only** rather than fully enforced. |
+| **Access governance** | Manager approval and reviewer decisions were recorded, but the review export showed **Not applied**. Remediation was verified separately. |
+| **UAR reporting** | A sanitized CSV and manual decision-to-remediation reconciliation were produced; **scheduled exports were not implemented**. |
+| **Zammad authorization** | Customer/Agent separation was tested; automated provisioning or recertification of Zammad's local roles was **not** implemented. |
+| **Operational lifecycle** | SCIM credential rotation and automated cross-application drift monitoring remain future controls, not completed tests. |
 
-See the existing security standard, lifecycle SOP, operations runbook, and control assessment in [`Documentation/`](Documentation/). They describe configuration decisions and follow-up controls, not a production certification.
+## Repository guide
 
-## The outcome
+- **[Architecture](Architecture/CHS-Identity-Architecture.md):** one diagram showing the authentication, provisioning, governance, and application-authorization boundaries.
+- **[Evidence](Evidence/README.md):** screenshots and a sanitized reconciliation CSV, organized by control area.
+- **[UAR reconciliation](Documentation/CHS-UAR-Audit-Reconciliation.md):** what the reviewer decided, what was separately changed, and what the final snapshots establish.
+- **[Zammad verification](Documentation/CHS-Zammad-SSO-RBAC-Test.md):** the SAML configuration and observed Customer/Agent behavior.
 
-This wasn't just a set of Microsoft Entra screenshots. I followed the same access problem through **authentication, approval, provisioning, recertification, role changes, support, and audit evidence**. The key result was learning to distinguish a successful action in one system from a proven final state in another.
-
-**Repository guide:** [`Architecture/`](Architecture/) shows the implemented identity flows; [`Evidence/README.md`](Evidence/README.md) indexes screenshots by business question; [`Automation/`](Automation/) contains the tested-scenario scripts and synthetic inputs; [`Documentation/`](Documentation/) contains controls and reconciliations; [`Demo/`](Demo/) contains walkthrough materials.
-
-**Scope:** This is a simulated healthcare lab using fictional users and no patient data. It is **not** a production deployment, HIPAA compliance attestation, or formal certification assessment. Only the explicitly observed outcomes above are claimed as tested.
+**Scope:** This is a fictional healthcare IAM lab with simulated users and no patient data. It is not a production deployment, a HIPAA compliance attestation, or a certification assessment. Outcomes are described only to the extent supported by the tests and evidence shown.
