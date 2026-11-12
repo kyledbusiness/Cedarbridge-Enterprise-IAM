@@ -24,7 +24,7 @@ I built an enterprise IAM lab using **Microsoft Entra ID as the workforce identi
 - Used **Entitlement Management and Access Reviews** to document a contractor's access request, manager approval, recertification decision, and separate remediation verification.
 - Connected **Zammad to Entra using SAML 2.0** and tested the difference between a Customer who submits tickets and an Agent who manages them.
 
-[View the identity architecture](Architecture/CHS-Identity-Architecture.md) · [Browse supporting evidence](Evidence/README.md)
+[View the identity architecture](Architecture/CHS-Identity-Architecture.md) · [Browse supporting evidence](Evidence/)
 
 ---
 
