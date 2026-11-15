@@ -2,6 +2,8 @@
 
 **GitHub Enterprise Managed Users · OIDC · SCIM · Conditional Access · PIM · Identity Governance · Zammad SAML SSO**
 
+[Watch the 4-minute project breakdown](https://www.loom.com/share/3d2887cc289b4b8d85d350de8739e908)
+
 ## Problem Statement
 
 Cedarbridge Health System (CHS) is a **fictional healthcare organization** integrating three newly acquired clinics. Its clinical integration team needs access to GitHub repositories, contractors need temporary access to support projects, and employees need an IT support desk when something goes wrong.
